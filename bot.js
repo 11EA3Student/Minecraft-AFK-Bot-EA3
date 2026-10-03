@@ -38,13 +38,12 @@ const bot = mineflayer.createBot({
   port: config.serverPort,
   username: config.botUsername,
   auth: 'offline',
-  version: "1.21", // Forced version to fix the "No data available" error
+  version: false, // Auto-negotiate protocol with server version 26.3
   viewDistance: config.botChunk
 });
 
 let movementPhase = 0;
 const STEP_INTERVAL = 1500;
-const STEP_SPEED    = 1;
 const JUMP_DURATION = 500;
 
 // ====== 4. SPAWN & MOVEMENT CYCLE ======
@@ -97,7 +96,10 @@ function movementCycle() {
 // ====== 5. ERROR, KICK, & DISCORD LOGGING ======
 bot.on('error', (err) => {
   console.error('⚠️ Error:', err);
-  sendDiscordMessage(`⚠️ **Bot Error:** ${err.message}`);
+  // Prevent crash loop notifications if version handshake glitches out
+  if (!err.message.includes('version')) {
+    sendDiscordMessage(`⚠️ **Bot Error:** ${err.message}`);
+  }
 });
 
 bot.on('end', () => {
