@@ -10,6 +10,8 @@ http.createServer((req, res) => {
 const mineflayer = require('mineflayer');
 const config = require('./config.json');
 
+let bot;
+
 // ====== 2. DISCORD WEBHOOK FUNCTION ======
 function sendDiscordMessage(message) {
   if (!config.discordWebhook || config.discordWebhook.includes("PASTE_YOUR")) return;
@@ -32,94 +34,105 @@ function sendDiscordMessage(message) {
   req.end();
 }
 
-// ====== 3. BOT INITIALIZATION ======
-const bot = mineflayer.createBot({
-  host: config.serverHost,
-  port: config.serverPort,
-  username: config.botUsername,
-  auth: 'offline',
-  version: "1.21", 
-  viewDistance: config.botChunk,
-  hideErrors: true // Ignores unknown game registry asset packets
-});
-
-let movementPhase = 0;
-const STEP_INTERVAL = 1500;
-const JUMP_DURATION = 500;
-
-// ====== 4. SPAWN & AUTO-AUTH HANDLER ======
-bot.on('spawn', () => {
-  console.log(`[SYSTEM] ${config.botUsername} spawned.`);
+// ====== 3. AUTOMATED BOT START & RECONNECT ENGINE ======
+function startBot() {
+  console.log(`[SYSTEM] Attempting to connect bot instance...`);
   
-  // Handle /register and /login sequences for AuthMe
-  setTimeout(() => {
-    if (config.authmePassword) {
-      console.log(`[AUTH] Sending login/registration strings...`);
-      bot.chat(`/register ${config.authmePassword} ${config.authmePassword}`);
-      bot.chat(`/login ${config.authmePassword}`);
-    }
-  }, 1500);
+  bot = mineflayer.createBot({
+    host: config.serverHost,
+    port: config.serverPort,
+    username: config.botUsername,
+    auth: 'offline',
+    version: "1.21", 
+    viewDistance: config.botChunk,
+    hideErrors: true // Suppress unmapped version asset crashes
+  });
 
-  // Initialize movement cycle safely after login commands execute
-  setTimeout(() => {
-    bot.setControlState('sneak', true);
-    console.log(`✅ ${config.botUsername} is ready and moving!`);
-    sendDiscordMessage(`✅ **${config.botUsername}** has successfully connected to **${config.serverHost}**!`);
-  }, 4000);
+  let movementPhase = 0;
+  const STEP_INTERVAL = 1500;
+  const JUMP_DURATION = 500;
 
-  setTimeout(movementCycle, STEP_INTERVAL);
-});
+  // ====== 4. SPAWN & AUTO-AUTH HANDLER ======
+  bot.once('spawn', () => {
+    console.log(`[SYSTEM] ${config.botUsername} spawned into world.`);
+    
+    // Fire Auth login text sequences right away to avoid idle kick timers
+    setTimeout(() => {
+      if (config.authmePassword) {
+        console.log(`[AUTH] Automating password credentials...`);
+        bot.chat(`/register ${config.authmePassword} ${config.authmePassword}`);
+        bot.chat(`/login ${config.authmePassword}`);
+      }
+    }, 1500);
 
-function movementCycle() {
-  if (!bot.entity) return;
+    // Turn on loops
+    setTimeout(() => {
+      bot.setControlState('sneak', true);
+      console.log(`✅ ${config.botUsername} is safe and moving!`);
+      sendDiscordMessage(`✅ **${config.botUsername}** has successfully logged into **${config.serverHost}**!`);
+    }, 4000);
 
-  switch (movementPhase) {
-    case 0:
-      bot.setControlState('forward', true);
-      bot.setControlState('back', false);
-      bot.setControlState('jump', false);
-      break;
-    case 1:
-      bot.setControlState('forward', false);
-      bot.setControlState('back', true);
-      bot.setControlState('jump', false);
-      break;
-    case 2:
-      bot.setControlState('forward', false);
-      bot.setControlState('back', false);
-      bot.setControlState('jump', true);
-      setTimeout(() => {
+    setTimeout(movementCycle, STEP_INTERVAL);
+  });
+
+  function movementCycle() {
+    if (!bot || !bot.entity) return;
+
+    switch (movementPhase) {
+      case 0:
+        bot.setControlState('forward', true);
+        bot.setControlState('back', false);
         bot.setControlState('jump', false);
-      }, JUMP_DURATION);
-      break;
-    case 3:
-      bot.setControlState('forward', false);
-      bot.setControlState('back', false);
-      bot.setControlState('jump', false);
-      break;
+        break;
+      case 1:
+        bot.setControlState('forward', false);
+        bot.setControlState('back', true);
+        bot.setControlState('jump', false);
+        break;
+      case 2:
+        bot.setControlState('forward', false);
+        bot.setControlState('back', false);
+        bot.setControlState('jump', true);
+        setTimeout(() => {
+          if(bot) bot.setControlState('jump', false);
+        }, JUMP_DURATION);
+        break;
+      case 3:
+        bot.setControlState('forward', false);
+        bot.setControlState('back', false);
+        bot.setControlState('jump', false);
+        break;
+    }
+
+    movementPhase = (movementPhase + 1) % 4;
+    setTimeout(movementCycle, STEP_INTERVAL);
   }
 
-  movementPhase = (movementPhase + 1) % 4;
-  setTimeout(movementCycle, STEP_INTERVAL);
+  // ====== 5. RECONNECT HOOK EVENTS ======
+  bot.on('error', (err) => {
+    if (err.message.includes('PartialReadError') || err.message.includes('undefined')) {
+      return; // Ignore internal registry parsing mismatched warning configurations
+    }
+    console.error('⚠️ Error:', err);
+    sendDiscordMessage(`⚠️ **Bot Error:** ${err.message}`);
+  });
+
+  // Reconnect if the stream stops or the bot is dropped/kicked
+  bot.on('end', () => {
+    console.log('⛔️ Bot Disconnected! Reconnecting in 10 seconds...');
+    sendDiscordMessage(`⛔️ **${config.botUsername}** disconnected silently. Reconnecting automatically in 10 seconds...`);
+    
+    // Clean old instances out of memory and try again
+    bot = null;
+    setTimeout(startBot, 10000); 
+  });
+
+  bot.on('kick', (reason) => {
+    const kickReason = typeof reason === 'object' ? JSON.stringify(reason) : reason;
+    console.log(`❌ Kicked: ${kickReason}`);
+    sendDiscordMessage(`❌ **${config.botUsername}** was kicked. Reason: ${kickReason}`);
+  });
 }
 
-// ====== 5. ERROR, KICK, & DISCORD LOGGING ======
-bot.on('error', (err) => {
-  // Suppress PartialRead data errors completely so they don't disconnect the bot
-  if (err.message.includes('PartialReadError') || err.message.includes('undefined')) {
-    console.log('[NETWORK] Suppressed packet parsing version mismatch warning.');
-    return;
-  }
-  console.error('⚠️ Error:', err);
-  sendDiscordMessage(`⚠️ **Bot Error:** ${err.message}`);
-});
-
-bot.on('end', () => {
-  console.log('⛔️ Bot Disconnected!');
-  sendDiscordMessage(`⛔️ **${config.botUsername}** has disconnected from the server.`);
-});
-
-bot.on('kick', (reason) => {
-  const kickReason = typeof reason === 'object' ? JSON.stringify(reason) : reason;
-  sendDiscordMessage(`❌ **${config.botUsername}** was kicked. Reason: ${kickReason}`);
-});
+// Start the loop engine
+startBot();
