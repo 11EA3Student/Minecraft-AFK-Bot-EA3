@@ -28,29 +28,45 @@ const AUTH_PROMPT_PATTERNS = [
 ];
 
 let authHandled = false;
+let reconnectDelay = 3000;
+const MAX_RECONNECT_DELAY = 60000;
 
-const bot = mineflayer.createBot({
-  host: config.serverHost,
-  port: config.serverPort,
-  username: config.botUsername,
-  auth: 'offline',
-  version: false,
-  viewDistance: config.botChunk
-});
+let bot;
+
+function createBot() {
+  bot = mineflayer.createBot({
+    host: config.serverHost,
+    port: config.serverPort,
+    username: config.botUsername,
+    auth: 'offline',
+    version: false,
+    viewDistance: config.botChunk
+  });
+
+  bot.on('spawn', onSpawn);
+  bot.on('message', onMessage);
+  bot.on('error', onError);
+  bot.on('end', onEnd);
+}
 
 let movementPhase = 0;
-const STEP_INTERVAL = 1500;
+const STEP_INTERVAL = 2000;
 const STEP_SPEED    = 1;
 const JUMP_DURATION = 500;
+let movementTimer = null;
 
 function sendLogin() {
-  bot.chat(`/login ${BOT_PASSWORD}`);
-  console.log('🔐 Login command sent');
+  if (bot && bot.entity) {
+    bot.chat(`/login ${BOT_PASSWORD}`);
+    console.log('🔐 Login command sent');
+  }
 }
 
 function sendRegister() {
-  bot.chat(`/register ${BOT_PASSWORD} ${BOT_PASSWORD}`);
-  console.log('📝 Register command sent');
+  if (bot && bot.entity) {
+    bot.chat(`/register ${BOT_PASSWORD} ${BOT_PASSWORD}`);
+    console.log('📝 Register command sent');
+  }
 }
 
 function handleAuthPrompt(rawText) {
@@ -73,26 +89,31 @@ function handleAuthPrompt(rawText) {
   }, 400);
 }
 
-bot.on('spawn', () => {
+function onSpawn() {
+  // Reset reconnect delay on successful spawn
+  reconnectDelay = 3000;
+  
+  console.log(`✅ ${config.botUsername} spawned!`);
+  
   // ====== AUTOMATED AUTH ======
   setTimeout(() => {
     sendLogin();
-  }, 1000);
+  }, 500);
 
   setTimeout(() => {
     sendRegister();
-  }, 3000);
+  }, 1500);
   // ==========================
 
+  // Wait much longer before starting movement (give server time to register player fully)
   setTimeout(() => {
-    bot.setControlState('sneak', true);
-    console.log(`✅ ${config.botUsername} is Ready!`);
+    console.log('🚶 Starting AFK movement cycle');
+    movementPhase = 0;
+    startMovementCycle();
   }, 5000);
+}
 
-  setTimeout(movementCycle, STEP_INTERVAL);
-});
-
-bot.on('message', (jsonMsg) => {
+function onMessage(jsonMsg) {
   const text = jsonMsg.toString();
   const promptMatch = AUTH_PROMPT_PATTERNS.some((pattern) => pattern.test(text));
 
@@ -100,47 +121,71 @@ bot.on('message', (jsonMsg) => {
     console.log(`🔔 Auth prompt detected: ${text}`);
     handleAuthPrompt(text);
   }
-});
+}
+
+function startMovementCycle() {
+  if (movementTimer) clearTimeout(movementTimer);
+  movementCycle();
+}
 
 function movementCycle() {
-  if (!bot.entity) return;
+  if (!bot || !bot.entity) {
+    console.log('⚠️ Bot not ready, stopping movement');
+    return;
+  }
+
+  // Release all controls first
+  bot.setControlState('forward', false);
+  bot.setControlState('back', false);
+  bot.setControlState('left', false);
+  bot.setControlState('right', false);
+  bot.setControlState('jump', false);
 
   switch (movementPhase) {
     case 0:
       bot.setControlState('forward', true);
-      bot.setControlState('back', false);
-      bot.setControlState('jump', false);
+      console.log('→ Moving forward');
       break;
     case 1:
-      bot.setControlState('forward', false);
       bot.setControlState('back', true);
-      bot.setControlState('jump', false);
+      console.log('← Moving backward');
       break;
     case 2:
-      bot.setControlState('forward', false);
-      bot.setControlState('back', false);
       bot.setControlState('jump', true);
+      console.log('↑ Jumping');
       setTimeout(() => {
-        bot.setControlState('jump', false);
+        if (bot) bot.setControlState('jump', false);
       }, JUMP_DURATION);
       break;
     case 3:
-      bot.setControlState('forward', false);
-      bot.setControlState('back', false);
-      bot.setControlState('jump', false);
+      // Idle/stand still
+      console.log('⏸ Standing still');
       break;
   }
 
   movementPhase = (movementPhase + 1) % 4;
 
-  setTimeout(movementCycle, STEP_INTERVAL);
+  movementTimer = setTimeout(movementCycle, STEP_INTERVAL);
 }
 
-bot.on('error', (err) => {
-  console.error('⚠️ Error:', err);
-});
+function onError(err) {
+  console.error('⚠️ Error:', err.message);
+}
 
-bot.on('end', () => {
+function onEnd() {
   console.log('⛔️ Bot Disconnected!');
   authHandled = false;
-});
+  movementPhase = 0;
+  
+  if (movementTimer) clearTimeout(movementTimer);
+  
+  console.log(`🔄 Reconnecting in ${reconnectDelay}ms...`);
+  setTimeout(() => {
+    // Increase delay for next reconnect attempt (exponential backoff)
+    reconnectDelay = Math.min(reconnectDelay * 1.5, MAX_RECONNECT_DELAY);
+    createBot();
+  }, reconnectDelay);
+}
+
+// Start the bot
+createBot();
