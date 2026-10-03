@@ -38,23 +38,34 @@ const bot = mineflayer.createBot({
   port: config.serverPort,
   username: config.botUsername,
   auth: 'offline',
-  version: "1.21", // Uses stable protocol translated via ViaBackwards plugin
-  viewDistance: config.botChunk
+  version: "1.21", 
+  viewDistance: config.botChunk,
+  hideErrors: true // Ignores unknown game registry asset packets
 });
 
 let movementPhase = 0;
 const STEP_INTERVAL = 1500;
 const JUMP_DURATION = 500;
 
-// ====== 4. SPAWN & MOVEMENT CYCLE ======
+// ====== 4. SPAWN & AUTO-AUTH HANDLER ======
 bot.on('spawn', () => {
+  console.log(`[SYSTEM] ${config.botUsername} spawned.`);
+  
+  // Handle /register and /login sequences for AuthMe
+  setTimeout(() => {
+    if (config.authmePassword) {
+      console.log(`[AUTH] Sending login/registration strings...`);
+      bot.chat(`/register ${config.authmePassword} ${config.authmePassword}`);
+      bot.chat(`/login ${config.authmePassword}`);
+    }
+  }, 1500);
+
+  // Initialize movement cycle safely after login commands execute
   setTimeout(() => {
     bot.setControlState('sneak', true);
-    console.log(`✅ ${config.botUsername} is Ready!`);
-    
-    // Send Discord message when bot spawns successfully
-    sendDiscordMessage(`✅ **${config.botUsername}** has successfully connected to **${config.serverHost}** and is now AFK!`);
-  }, 3000);
+    console.log(`✅ ${config.botUsername} is ready and moving!`);
+    sendDiscordMessage(`✅ **${config.botUsername}** has successfully connected to **${config.serverHost}**!`);
+  }, 4000);
 
   setTimeout(movementCycle, STEP_INTERVAL);
 });
@@ -89,12 +100,16 @@ function movementCycle() {
   }
 
   movementPhase = (movementPhase + 1) % 4;
-
   setTimeout(movementCycle, STEP_INTERVAL);
 }
 
 // ====== 5. ERROR, KICK, & DISCORD LOGGING ======
 bot.on('error', (err) => {
+  // Suppress PartialRead data errors completely so they don't disconnect the bot
+  if (err.message.includes('PartialReadError') || err.message.includes('undefined')) {
+    console.log('[NETWORK] Suppressed packet parsing version mismatch warning.');
+    return;
+  }
   console.error('⚠️ Error:', err);
   sendDiscordMessage(`⚠️ **Bot Error:** ${err.message}`);
 });
@@ -105,5 +120,6 @@ bot.on('end', () => {
 });
 
 bot.on('kick', (reason) => {
-  sendDiscordMessage(`❌ **${config.botUsername}** was kicked from the server. Reason: ${reason}`);
+  const kickReason = typeof reason === 'object' ? JSON.stringify(reason) : reason;
+  sendDiscordMessage(`❌ **${config.botUsername}** was kicked. Reason: ${kickReason}`);
 });
