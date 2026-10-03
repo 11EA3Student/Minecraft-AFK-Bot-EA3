@@ -38,7 +38,7 @@ const bot = mineflayer.createBot({
   port: config.serverPort,
   username: config.botUsername,
   auth: 'offline',
-  version: false,
+  version: "1.21", // Forced version to fix the "No data available" error
   viewDistance: config.botChunk
 });
 
