@@ -50,8 +50,7 @@ function createBot() {
 }
 
 let movementPhase = 0;
-const STEP_INTERVAL = 2000;
-const STEP_SPEED    = 1;
+const STEP_INTERVAL = 1500;
 const JUMP_DURATION = 500;
 let movementTimer = null;
 
@@ -90,12 +89,15 @@ function handleAuthPrompt(rawText) {
 }
 
 function onSpawn() {
-  // Reset reconnect delay on successful spawn
   reconnectDelay = 3000;
-  
-  console.log(`✅ ${config.botUsername} spawned!`);
-  
-  // ====== AUTOMATED AUTH ======
+  authHandled = false;
+
+  console.log(`✅ ${config.botUsername} spawned! Waiting for auth...`);
+
+  // Auth immediately, but keep player still while login is processed.
+  bot.setControlState('sneak', true);
+  console.log('🕵️ Sneak mode enabled');
+
   setTimeout(() => {
     sendLogin();
   }, 500);
@@ -103,14 +105,15 @@ function onSpawn() {
   setTimeout(() => {
     sendRegister();
   }, 1500);
-  // ==========================
 
-  // Wait much longer before starting movement (give server time to register player fully)
+  // Do not move until AuthMe is definitely done processing login.
   setTimeout(() => {
-    console.log('🚶 Starting AFK movement cycle');
-    movementPhase = 0;
-    startMovementCycle();
-  }, 5000);
+    if (bot && bot.entity) {
+      console.log('🚶 Starting AFK movement cycle');
+      movementPhase = 0;
+      startMovementCycle();
+    }
+  }, 8000);
 }
 
 function onMessage(jsonMsg) {
@@ -129,12 +132,9 @@ function startMovementCycle() {
 }
 
 function movementCycle() {
-  if (!bot || !bot.entity) {
-    console.log('⚠️ Bot not ready, stopping movement');
-    return;
-  }
+  if (!bot || !bot.entity) return;
 
-  // Release all controls first
+  // Clear all movement states.
   bot.setControlState('forward', false);
   bot.setControlState('back', false);
   bot.setControlState('left', false);
@@ -144,27 +144,22 @@ function movementCycle() {
   switch (movementPhase) {
     case 0:
       bot.setControlState('forward', true);
-      console.log('→ Moving forward');
       break;
     case 1:
       bot.setControlState('back', true);
-      console.log('← Moving backward');
       break;
     case 2:
       bot.setControlState('jump', true);
-      console.log('↑ Jumping');
       setTimeout(() => {
         if (bot) bot.setControlState('jump', false);
       }, JUMP_DURATION);
       break;
     case 3:
-      // Idle/stand still
-      console.log('⏸ Standing still');
+      // Idle.
       break;
   }
 
   movementPhase = (movementPhase + 1) % 4;
-
   movementTimer = setTimeout(movementCycle, STEP_INTERVAL);
 }
 
@@ -176,16 +171,14 @@ function onEnd() {
   console.log('⛔️ Bot Disconnected!');
   authHandled = false;
   movementPhase = 0;
-  
+
   if (movementTimer) clearTimeout(movementTimer);
-  
+
   console.log(`🔄 Reconnecting in ${reconnectDelay}ms...`);
   setTimeout(() => {
-    // Increase delay for next reconnect attempt (exponential backoff)
     reconnectDelay = Math.min(reconnectDelay * 1.5, MAX_RECONNECT_DELAY);
     createBot();
   }, reconnectDelay);
 }
 
-// Start the bot
 createBot();
