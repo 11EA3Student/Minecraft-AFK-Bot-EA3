@@ -15,7 +15,8 @@ const config = require('./config.json');
 console.log('📋 Config loaded:', {
   host: config.serverHost,
   port: config.serverPort,
-  username: config.botUsername
+  username: config.botUsername,
+  chunk: config.botChunk
 });
 
 const BOT_PASSWORD = 'ChooseABotPassword123';
@@ -38,18 +39,25 @@ function createBot() {
       viewDistance: config.botChunk
     });
 
-    console.log('✅ Bot created, registering events...');
+    console.log('✅ Bot object created');
+
+    bot.on('connect', () => {
+      console.log('🌐 Connected to server');
+    });
+
+    bot.on('login', () => {
+      console.log('🔑 Logged in to server');
+    });
 
     bot.on('spawn', onSpawn);
     bot.on('message', onMessage);
     bot.on('error', onError);
     bot.on('end', onEnd);
-    bot.on('login', () => console.log('🔑 Login event fired'));
-    bot.on('connect', () => console.log('🌐 Connect event fired'));
 
     console.log('✅ Events registered');
   } catch (e) {
     console.error('❌ Error creating bot:', e.message);
+    console.error(e);
   }
 }
 
@@ -89,9 +97,10 @@ function onSpawn() {
 
 function onMessage(jsonMsg) {
   const text = jsonMsg.toString().toLowerCase();
+  console.log('💬 Message received:', jsonMsg.toString());
   
   if (/password|login|register|successful/.test(text) && !authHandled) {
-    console.log(`🔔 Auth prompt: ${jsonMsg.toString()}`);
+    console.log(`🔔 Auth prompt detected`);
     authHandled = true;
     
     setTimeout(() => {
@@ -101,8 +110,9 @@ function onMessage(jsonMsg) {
 }
 
 function onError(err) {
-  console.error('⚠️ Error:', err.message);
+  console.error('⚠️ Error event:', err.message);
   console.error('Error code:', err.code);
+  console.error('Full error:', err);
 }
 
 function onEnd() {
@@ -116,6 +126,6 @@ function onEnd() {
   }, reconnectDelay);
 }
 
-console.log('🚀 Starting bot creation...');
+console.log('🚀 Attempting connection to', config.serverHost + ':' + config.serverPort);
 createBot();
-console.log('✅ Bot creation started, waiting for events...');
+console.log('✅ Bot creation initiated');
