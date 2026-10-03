@@ -90,12 +90,16 @@ function startKeepAlive() {
   
   keepAliveTimer = setInterval(() => {
     if (bot && bot.entity) {
-      // Send a chat message every 20s to keep connection alive
-      // This is safe and won't trigger movement packet kicks
-      bot.chat('');
-      console.log('💬 Keep-alive ping sent');
+      try {
+        // Rotate head slightly to keep connection alive
+        // This doesn't send movement packets, just updates player rotation
+        bot.look(Math.random() * 360, 0, false);
+        console.log('👀 Keep-alive look sent');
+      } catch (e) {
+        console.log('⚠️ Keep-alive error:', e.message);
+      }
     }
-  }, 20000);
+  }, 25000);
 }
 
 function stopKeepAlive() {
