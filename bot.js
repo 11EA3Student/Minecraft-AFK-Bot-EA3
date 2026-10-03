@@ -11,16 +11,28 @@ const mineflayer = require('mineflayer');
 const config = require('./config.json');
 
 const BOT_PASSWORD = 'ChooseABotPassword123';
+const AUTH_PROMPT_PATTERNS = [
+  /please\s+(log\s+in|register|sign\s+in)/i,
+  /type\s+\/login\b/i,
+  /type\s+\/register\b/i,
+  /\/login\b/i,
+  /\/register\b/i,
+  /password\b/i,
+  /authenticate/i,
+  /account\b/i,
+  /new\s+account/i,
+  /login\s+required/i,
+  /register\s+required/i,
+  /wrong\s+password/i,
+  /invalid\s+password/i,
+  /successful login/i
+];
 
+let authHandled = false;
 let reconnectDelay = 3000;
 const MAX_RECONNECT_DELAY = 60000;
 
 let bot;
-let movementPhase = 0;
-const STEP_INTERVAL = 1500;
-const JUMP_DURATION = 500;
-let movementTimer = null;
-let isMoving = false;
 
 function createBot() {
   bot = mineflayer.createBot({
@@ -38,87 +50,66 @@ function createBot() {
   bot.on('end', onEnd);
 }
 
+function sendLogin() {
+  if (bot && bot.entity) {
+    bot.chat(`/login ${BOT_PASSWORD}`);
+    console.log('🔐 Login command sent');
+  }
+}
+
+function sendRegister() {
+  if (bot && bot.entity) {
+    bot.chat(`/register ${BOT_PASSWORD} ${BOT_PASSWORD}`);
+    console.log('📝 Register command sent');
+  }
+}
+
+function handleAuthPrompt(rawText) {
+  const text = String(rawText || '').toLowerCase();
+  if (!text || authHandled) return;
+
+  const isRegisterPrompt = /register|new account|create account|sign up/.test(text);
+  const isLoginPrompt = /login|log in|sign in|password|authenticate|account|successful login/.test(text);
+
+  if (!isRegisterPrompt && !isLoginPrompt) return;
+
+  authHandled = true;
+
+  setTimeout(() => {
+    if (isRegisterPrompt) {
+      sendRegister();
+    } else {
+      sendLogin();
+    }
+  }, 400);
+}
+
 function onSpawn() {
   reconnectDelay = 3000;
-  isMoving = false;
-  movementPhase = 0;
+  authHandled = false;
 
-  console.log(`✅ ${config.botUsername} spawned! Sending auth commands...`);
+  console.log(`✅ ${config.botUsername} spawned! Authenticating...`);
 
-  // Send login immediately
   setTimeout(() => {
-    if (bot && bot.entity) {
-      bot.chat(`/login ${BOT_PASSWORD}`);
-      console.log('🔐 Login command sent');
-    }
+    sendLogin();
   }, 500);
 
-  // Send register fallback
   setTimeout(() => {
-    if (bot && bot.entity) {
-      bot.chat(`/register ${BOT_PASSWORD} ${BOT_PASSWORD}`);
-      console.log('📝 Register command sent');
-    }
+    sendRegister();
   }, 1500);
 
-  // WAIT 12 FULL SECONDS before enabling any movement
-  setTimeout(() => {
-    if (bot && bot.entity && !isMoving) {
-      console.log('🚶 Starting AFK movement cycle');
-      isMoving = true;
-      startMovementCycle();
-    }
-  }, 12000);
+  // No movement commands at all. This avoids invalid move packets on AuthMe.
+  console.log('🚶 Standing idle to avoid invalid move packet kicks');
 }
 
 function onMessage(jsonMsg) {
-  const text = jsonMsg.toString().toLowerCase();
-  
-  if (/password|login|register/.test(text) && !isMoving) {
-    console.log(`🔔 Auth prompt: ${jsonMsg.toString()}`);
-    if (bot && bot.entity) {
-      bot.chat(`/login ${BOT_PASSWORD}`);
-    }
+  const text = jsonMsg.toString();
+  const promptMatch = AUTH_PROMPT_PATTERNS.some((pattern) => pattern.test(text));
+
+  if (promptMatch) {
+    console.log(`🔔 Auth prompt: ${text}`);
+    handleAuthPrompt(text);
   }
-}
-
-function startMovementCycle() {
-  if (movementTimer) clearTimeout(movementTimer);
-  if (isMoving) {
-    movementCycle();
-  }
-}
-
-function movementCycle() {
-  if (!bot || !bot.entity || !isMoving) return;
-
-  // Clear all controls
-  bot.setControlState('forward', false);
-  bot.setControlState('back', false);
-  bot.setControlState('left', false);
-  bot.setControlState('right', false);
-  bot.setControlState('jump', false);
-
-  switch (movementPhase) {
-    case 0:
-      bot.setControlState('forward', true);
-      break;
-    case 1:
-      bot.setControlState('back', true);
-      break;
-    case 2:
-      bot.setControlState('jump', true);
-      setTimeout(() => {
-        if (bot) bot.setControlState('jump', false);
-      }, JUMP_DURATION);
-      break;
-    case 3:
-      // Idle
-      break;
-  }
-
-  movementPhase = (movementPhase + 1) % 4;
-  movementTimer = setTimeout(movementCycle, STEP_INTERVAL);
 }
 
 function onError(err) {
@@ -127,13 +118,7 @@ function onError(err) {
 
 function onEnd() {
   console.log('⛔️ Bot Disconnected!');
-  isMoving = false;
-  movementPhase = 0;
-
-  if (movementTimer) {
-    clearTimeout(movementTimer);
-    movementTimer = null;
-  }
+  authHandled = false;
 
   console.log(`🔄 Reconnecting in ${reconnectDelay}ms...`);
   setTimeout(() => {
