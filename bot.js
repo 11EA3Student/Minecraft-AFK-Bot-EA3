@@ -11,29 +11,12 @@ const mineflayer = require('mineflayer');
 const config = require('./config.json');
 
 const BOT_PASSWORD = 'ChooseABotPassword123';
-const AUTH_PROMPT_PATTERNS = [
-  /please\s+(log\s+in|register|sign\s+in)/i,
-  /type\s+\/login\b/i,
-  /type\s+\/register\b/i,
-  /\/login\b/i,
-  /\/register\b/i,
-  /password\b/i,
-  /authenticate/i,
-  /account\b/i,
-  /new\s+account/i,
-  /login\s+required/i,
-  /register\s+required/i,
-  /wrong\s+password/i,
-  /invalid\s+password/i,
-  /successful login/i
-];
 
 let authHandled = false;
 let reconnectDelay = 3000;
 const MAX_RECONNECT_DELAY = 60000;
 
 let bot;
-let keepAliveTimer = null;
 
 function createBot() {
   bot = mineflayer.createBot({
@@ -65,50 +48,6 @@ function sendRegister() {
   }
 }
 
-function handleAuthPrompt(rawText) {
-  const text = String(rawText || '').toLowerCase();
-  if (!text || authHandled) return;
-
-  const isRegisterPrompt = /register|new account|create account|sign up/.test(text);
-  const isLoginPrompt = /login|log in|sign in|password|authenticate|account|successful login/.test(text);
-
-  if (!isRegisterPrompt && !isLoginPrompt) return;
-
-  authHandled = true;
-
-  setTimeout(() => {
-    if (isRegisterPrompt) {
-      sendRegister();
-    } else {
-      sendLogin();
-    }
-  }, 400);
-}
-
-function startKeepAlive() {
-  if (keepAliveTimer) clearInterval(keepAliveTimer);
-  
-  keepAliveTimer = setInterval(() => {
-    if (bot && bot.entity) {
-      try {
-        // Rotate head slightly to keep connection alive
-        // This doesn't send movement packets, just updates player rotation
-        bot.look(Math.random() * 360, 0, false);
-        console.log('👀 Keep-alive look sent');
-      } catch (e) {
-        console.log('⚠️ Keep-alive error:', e.message);
-      }
-    }
-  }, 25000);
-}
-
-function stopKeepAlive() {
-  if (keepAliveTimer) {
-    clearInterval(keepAliveTimer);
-    keepAliveTimer = null;
-  }
-}
-
 function onSpawn() {
   reconnectDelay = 3000;
   authHandled = false;
@@ -123,20 +62,19 @@ function onSpawn() {
     sendRegister();
   }, 1500);
 
-  // Start keep-alive after auth window
-  setTimeout(() => {
-    startKeepAlive();
-    console.log('🚶 Standing idle with keep-alive to prevent timeout');
-  }, 3000);
+  console.log('🚶 Standing idle to avoid invalid move packet kicks');
 }
 
 function onMessage(jsonMsg) {
-  const text = jsonMsg.toString();
-  const promptMatch = AUTH_PROMPT_PATTERNS.some((pattern) => pattern.test(text));
-
-  if (promptMatch) {
-    console.log(`🔔 Auth prompt: ${text}`);
-    handleAuthPrompt(text);
+  const text = jsonMsg.toString().toLowerCase();
+  
+  if (/password|login|register|successful/.test(text) && !authHandled) {
+    console.log(`🔔 Auth prompt: ${jsonMsg.toString()}`);
+    authHandled = true;
+    
+    setTimeout(() => {
+      sendLogin();
+    }, 300);
   }
 }
 
@@ -147,7 +85,6 @@ function onError(err) {
 function onEnd() {
   console.log('⛔️ Bot Disconnected!');
   authHandled = false;
-  stopKeepAlive();
 
   console.log(`🔄 Reconnecting in ${reconnectDelay}ms...`);
   setTimeout(() => {
