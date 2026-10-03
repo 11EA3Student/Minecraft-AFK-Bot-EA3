@@ -1,7 +1,6 @@
 // ====== 1. RENDER KEEP-ALIVE WEB SERVER ======
 const http = require('http');
 const https = require('https'); // Needed to send messages to Discord
-const dns = require('dns');     // Automatically resolves dynamic Aternos addresses
 http.createServer((req, res) => {
   res.write("Bot is running!");
   res.end();
@@ -35,36 +34,21 @@ function sendDiscordMessage(message) {
   req.end();
 }
 
-// ====== 3. AUTOMATED BOT START ENGINE ======
+// ====== 3. STABLE BOT START ENGINE ======
 function startBot() {
-  console.log(`[SYSTEM] Resolving current dynamic network routing paths...`);
+  console.log(`[SYSTEM] Knocking on Aternos network pipelines: ${config.serverHost}:${config.serverPort}`);
 
-  // Look up the SRV record to get the shifting dynamic IP address
-  dns.resolveSrv(`_minecraft._tcp.${config.serverHost}`, (err, addresses) => {
-    let finalHost = config.serverHost;
-    let finalPort = config.serverPort;
-
-    if (!err && addresses && addresses.length > 0) {
-      finalHost = addresses[0].name;
-      finalPort = addresses[0].port;
-      console.log(`[DNS] Successfully discovered current live routing path: ${finalHost}:${finalPort}`);
-    } else {
-      console.log(`[DNS] SRV lookup missed. Falling back to default configuration credentials.`);
-    }
-
-    // Launch bot instance
-    bot = mineflayer.createBot({
-      host: finalHost,
-      port: finalPort,
-      username: config.botUsername,
-      auth: 'offline',
-      version: "1.21", 
-      viewDistance: config.botChunk,
-      hideErrors: true 
-    });
-
-    setupBotEvents();
+  bot = mineflayer.createBot({
+    host: config.serverHost,
+    port: parseInt(config.serverPort),
+    username: config.botUsername,
+    auth: 'offline',
+    version: "1.21", // Handled smoothly via ViaBackwards plugin
+    viewDistance: config.botChunk,
+    hideErrors: true 
   });
+
+  setupBotEvents();
 }
 
 function setupBotEvents() {
@@ -72,35 +56,38 @@ function setupBotEvents() {
   const STEP_INTERVAL = 1500;
   const JUMP_DURATION = 500;
 
-  // ====== 4. HARDENED AUTO-AUTH HANDLER ======
+  // ====== 4. INSTANT SPAWN & AUTO-AUTH HANDLER ======
   bot.once('spawn', () => {
-    console.log(`[SYSTEM] ${config.botUsername} spawned into game canvas.`);
+    console.log(`[SUCCESS] ${config.botUsername} successfully stepped into the world canvas!`);
     
-    // Delayed sequence ensuring the commands register on the server packet buffer
+    // Instantly bomb chat with logins to outrun AuthMe kick timers
     setTimeout(() => {
       if (config.authmePassword) {
-        console.log(`[AUTH] Deploying authentication sequence commands...`);
-        // Sends both commands to cover newly created servers or old registrations
+        console.log(`[AUTH] Dispatching automated passwords...`);
         bot.chat(`/register ${config.authmePassword} ${config.authmePassword}`);
         bot.chat(`/login ${config.authmePassword}`);
       }
-    }, 2000); // 2 full seconds ensures chunk spawning phase is finished
+    }, 1000);
 
-    // Safety backup command fire if packet processing lags
-    setTimeout(() => {
-      if (config.authmePassword) {
-        bot.chat(`/login ${config.authmePassword}`);
-      }
-    }, 4000);
-
-    // Initialize anti-kick jumping movement patterns safely after auth clearing
+    // Turn on loops
     setTimeout(() => {
       bot.setControlState('sneak', true);
       console.log(`✅ ${config.botUsername} is authenticated and moving!`);
-      sendDiscordMessage(`✅ **${config.botUsername}** has bypassed Auth security loops and is now active on **${config.serverHost}**!`);
-    }, 6000);
+      sendDiscordMessage(`✅ **${config.botUsername}** has successfully logged into **${config.serverHost}** and is now running AFK!`);
+    }, 4000);
 
     setTimeout(movementCycle, STEP_INTERVAL);
+  });
+
+  // Backup Chat Listener for Security Plugins
+  bot.on('message', (jsonMsg) => {
+    const chatLine = jsonMsg.toString().toLowerCase();
+    if (chatLine.includes('register') || chatLine.includes('login') || chatLine.includes('password')) {
+      if (config.authmePassword) {
+        bot.chat(`/register ${config.authmePassword} ${config.authmePassword}`);
+        bot.chat(`/login ${config.authmePassword}`);
+      }
+    }
   });
 
   function movementCycle() {
@@ -136,29 +123,25 @@ function setupBotEvents() {
     setTimeout(movementCycle, STEP_INTERVAL);
   }
 
-  // ====== 5. RECONNECT HOOK EVENTS ======
+  // ====== 5. AGGRESSIVE RECONNECT TIMEOUTS ======
   bot.on('error', (err) => {
     if (err.message.includes('PartialReadError') || err.message.includes('undefined')) {
       return; 
     }
-    console.error('⚠️ Error:', err);
-    sendDiscordMessage(`⚠️ **Bot Error:** ${err.message}`);
+    console.error('⚠️ Error Log:', err.message);
   });
 
   bot.on('end', () => {
-    console.log('⛔️ Bot Disconnected! Reconnecting in 15 seconds...');
-    sendDiscordMessage(`⛔️ **${config.botUsername}** was disconnected. Re-fetching shifty address layout and logging back in...`);
-    
+    console.log('⛔️ Connection closed. Forcing reconnection loop in 10 seconds...');
     bot = null;
-    setTimeout(startBot, 15000); // 15 seconds allows old ghost sessions to fully timeout on the server side
+    setTimeout(startBot, 10000); 
   });
 
   bot.on('kick', (reason) => {
     const kickReason = typeof reason === 'object' ? JSON.stringify(reason) : reason;
     console.log(`❌ Kicked from server: ${kickReason}`);
-    sendDiscordMessage(`❌ **${config.botUsername}** was kicked. Reason: ${kickReason}`);
   });
 }
 
-// Kickstart execution
+// Fire the loop engine
 startBot();
