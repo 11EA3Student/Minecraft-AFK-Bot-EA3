@@ -10,7 +10,7 @@ http.createServer((req, res) => {
 const mineflayer = require('mineflayer');
 const config = require('./config.json');
 
-const BOT_PASSWORD = '123123123';
+const BOT_PASSWORD = 'ChooseABotPassword123';
 const AUTH_PROMPT_PATTERNS = [
   /please\s+(log\s+in|register|sign\s+in)/i,
   /type\s+\/login\b/i,
