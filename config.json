@@ -3,5 +3,6 @@
   "serverPort": 11844,
   "botUsername": "EA3Online",
   "botChunk": 1,
-  "discordWebhook": "https://discord.com/api/webhooks/1555829138080800922/TWmg4SlYRaANHHrC_8na6v6CfX6Rlsd_wk5ArMbdvBAoUTtQ9eXYwO8DSKI32mb8HlIR"
+  "discordWebhook": "https://discord.com/api/webhooks/1555829138080800922/TWmg4SlYRaANHHrC_8na6v6CfX6Rlsd_wk5ArMbdvBAoUTtQ9eXYwO8DSKI32mb8HlIR",
+  "authmePassword": "ChooseABotPassword123"
 }
