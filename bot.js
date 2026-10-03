@@ -94,9 +94,8 @@ function onSpawn() {
 
   console.log(`✅ ${config.botUsername} spawned! Waiting for auth...`);
 
-  // Auth immediately, but keep player still while login is processed.
-  bot.setControlState('sneak', true);
-  console.log('🕵️ Sneak mode enabled');
+  // DO NOT enable sneak or any controls immediately.
+  // Just send auth commands and wait.
 
   setTimeout(() => {
     sendLogin();
@@ -106,14 +105,14 @@ function onSpawn() {
     sendRegister();
   }, 1500);
 
-  // Do not move until AuthMe is definitely done processing login.
+  // Wait MUCH longer (12s) to let AuthMe fully settle player state before any movement.
   setTimeout(() => {
     if (bot && bot.entity) {
       console.log('🚶 Starting AFK movement cycle');
       movementPhase = 0;
       startMovementCycle();
     }
-  }, 8000);
+  }, 12000);
 }
 
 function onMessage(jsonMsg) {
@@ -140,6 +139,7 @@ function movementCycle() {
   bot.setControlState('left', false);
   bot.setControlState('right', false);
   bot.setControlState('jump', false);
+  bot.setControlState('sneak', false);
 
   switch (movementPhase) {
     case 0:
