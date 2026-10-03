@@ -1,12 +1,3 @@
-// ====== RENDER LIVE PORT BINDING (REQUIRED FOR CLOUD HOSTING) ======
-const http = require('http');
-http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.write("Bot Engine Live");
-  res.end();
-}).listen(process.env.PORT || 3000);
-
-// ====== ORIGINAL REPOSITORY CODE BELOW ======
 const mineflayer = require('mineflayer');
 const config = require('./config.json');
 
