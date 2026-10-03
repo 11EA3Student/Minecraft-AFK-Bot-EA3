@@ -3,7 +3,7 @@ const https = require('https');
 const mineflayer = require('mineflayer');
 const config = require('./config.json');
 
-// ====== RENDER KEEP-ALIVE NETWORKING ======
+// ====== 1. RENDER PORT BINDING FIX ======
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.write("AFK Engine Live");
@@ -13,9 +13,9 @@ http.createServer((req, res) => {
 let bot;
 let reconnectDelay = 5000;
 
-// ====== DISCORD LOGGING LAYER ======
+// ====== 2. DISCORD WEBHOOK LAYER ======
 function notifyDiscord(msg) {
-  if (!config.discordWebhook || config.discordWebhook.includes('://discord.com')) return;
+  if (!config.discordWebhook || !config.discordWebhook.startsWith('https://')) return;
   const payload = JSON.stringify({ content: msg });
   const url = new URL(config.discordWebhook);
   
@@ -32,49 +32,57 @@ function notifyDiscord(msg) {
   req.end();
 }
 
-// ====== CORE CLIENT FACTORY ======
+// ====== 3. BOT INITIALIZATION ENGINE ======
 function initializeBot() {
-  console.log(`[NETWORK] Target routing initialized: ${config.serverHost}:${config.serverPort}`);
+  console.log(`[NETWORK] Connecting to: ${config.serverHost}:${config.serverPort}`);
   
   bot = mineflayer.createBot({
     host: config.serverHost,
     port: parseInt(config.serverPort),
     username: config.botUsername,
     auth: 'offline',
-    version: "1.21", // Translated natively via ViaVersion + ViaBackwards
+    version: "1.21", // Works with your server's ViaVersion/ViaBackwards plugins
     viewDistance: config.botChunk,
-    skipValidation: true,
-    hideErrors: true
+    hideErrors: true  // Stops unmapped item data packet crashes
   });
 
-  // Strip physics and tracking engines to prevent packet parsing crashes
-  bot.physics = null;
+  bot.physics = null; // Lightweight option to prevent server strain
 
+  // ====== 4. SPAWN & AUTO-AUTHME LOGIC ======
   bot.once('spawn', () => {
-    console.log(`[LIVE] ${config.botUsername} successfully spawned.`);
-    reconnectDelay = 5000; // Reset reconnection delays on success
+    console.log(`[LIVE] ${config.botUsername} stepped into the world.`);
+    reconnectDelay = 5000; // Reset reconnection delays
     
-    // Fallback automated authentication sequence
+    // Automatically fire commands to outrun AuthMe kick timers
     setTimeout(() => {
       executeAuthentication();
     }, 2000);
+
+    // Turn on safe movement loop
+    setTimeout(() => {
+      if (bot) bot.setControlState('sneak', true);
+      console.log(`✅ ${config.botUsername} is authenticated and active.`);
+      notifyDiscord(`✅ **${config.botUsername}** has successfully joined **${config.serverHost}** and is now AFK!`);
+    }, 5000);
   });
 
+  // Smart chat reader to login if the server prompts for it
   bot.on('message', (jsonMsg) => {
-    const context = jsonMsg.toString().toLowerCase();
-    if (context.includes('register') || context.includes('login') || context.includes('password')) {
+    const chatText = jsonMsg.toString().toLowerCase();
+    if (chatText.includes('register') || chatText.includes('login') || chatText.includes('password')) {
       executeAuthentication();
     }
   });
 
+  // ====== 5. RECONNECT LOOPS ======
   bot.on('error', (err) => {
-    if (err.message.includes('PartialReadError')) return;
-    console.error(`[ERROR] Stream anomaly: ${err.message}`);
+    if (err.message.includes('PartialReadError')) return; // Ignore version data mismatched strings
+    console.error(`[ERROR] ${err.message}`);
   });
 
   bot.on('end', () => {
-    console.log(`[DISCONNECT] Stream closed. Re-indexing socket in ${reconnectDelay / 1000}s...`);
-    notifyDiscord(`⛔️ **${config.botUsername}** disconnected silently. Re-indexing connection socket...`);
+    console.log(`[DISCONNECT] Reconnecting in ${reconnectDelay / 1000} seconds...`);
+    notifyDiscord(`⛔️ **${config.botUsername}** disconnected. Reconnecting automatically in 15 seconds...`);
     bot = null;
     setTimeout(initializeBot, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 60000); // Exponential backoff safety cap
@@ -82,16 +90,17 @@ function initializeBot() {
 
   bot.on('kick', (reason) => {
     const explanation = typeof reason === 'object' ? JSON.stringify(reason) : reason;
-    console.log(`[KICKED] Server drop reason: ${explanation}`);
+    console.log(`[KICKED] Reason: ${explanation}`);
+    notifyDiscord(`❌ **${config.botUsername}** was kicked. Reason: ${explanation}`);
   });
 }
 
 function executeAuthentication() {
   if (!bot || !config.authmePassword) return;
-  console.log(`[SECURITY] Firing account pass tokens...`);
+  console.log(`[SECURITY] Sending login credentials...`);
   bot.chat(`/register ${config.authmePassword} ${config.authmePassword}`);
   bot.chat(`/login ${config.authmePassword}`);
 }
 
-// Execute Instance
+// Kickstart script execution
 initializeBot();
