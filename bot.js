@@ -33,6 +33,7 @@ let reconnectDelay = 3000;
 const MAX_RECONNECT_DELAY = 60000;
 
 let bot;
+let keepAliveTimer = null;
 
 function createBot() {
   bot = mineflayer.createBot({
@@ -84,6 +85,26 @@ function handleAuthPrompt(rawText) {
   }, 400);
 }
 
+function startKeepAlive() {
+  if (keepAliveTimer) clearInterval(keepAliveTimer);
+  
+  keepAliveTimer = setInterval(() => {
+    if (bot && bot.entity) {
+      // Send a chat message every 20s to keep connection alive
+      // This is safe and won't trigger movement packet kicks
+      bot.chat('');
+      console.log('💬 Keep-alive ping sent');
+    }
+  }, 20000);
+}
+
+function stopKeepAlive() {
+  if (keepAliveTimer) {
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = null;
+  }
+}
+
 function onSpawn() {
   reconnectDelay = 3000;
   authHandled = false;
@@ -98,8 +119,11 @@ function onSpawn() {
     sendRegister();
   }, 1500);
 
-  // No movement commands at all. This avoids invalid move packets on AuthMe.
-  console.log('🚶 Standing idle to avoid invalid move packet kicks');
+  // Start keep-alive after auth window
+  setTimeout(() => {
+    startKeepAlive();
+    console.log('🚶 Standing idle with keep-alive to prevent timeout');
+  }, 3000);
 }
 
 function onMessage(jsonMsg) {
@@ -119,6 +143,7 @@ function onError(err) {
 function onEnd() {
   console.log('⛔️ Bot Disconnected!');
   authHandled = false;
+  stopKeepAlive();
 
   console.log(`🔄 Reconnecting in ${reconnectDelay}ms...`);
   setTimeout(() => {
