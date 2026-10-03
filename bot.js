@@ -38,7 +38,7 @@ const bot = mineflayer.createBot({
   port: config.serverPort,
   username: config.botUsername,
   auth: 'offline',
-  version: false, // Auto-negotiate protocol with server version 26.3
+  version: "1.21", // Uses stable protocol translated via ViaBackwards plugin
   viewDistance: config.botChunk
 });
 
@@ -96,10 +96,7 @@ function movementCycle() {
 // ====== 5. ERROR, KICK, & DISCORD LOGGING ======
 bot.on('error', (err) => {
   console.error('⚠️ Error:', err);
-  // Prevent crash loop notifications if version handshake glitches out
-  if (!err.message.includes('version')) {
-    sendDiscordMessage(`⚠️ **Bot Error:** ${err.message}`);
-  }
+  sendDiscordMessage(`⚠️ **Bot Error:** ${err.message}`);
 });
 
 bot.on('end', () => {
