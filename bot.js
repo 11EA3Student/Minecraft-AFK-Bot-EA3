@@ -1,3 +1,12 @@
+// ====== RENDER LIVE PORT BINDING ======
+const http = require('http');
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.write("Bot Engine Live");
+  res.end();
+}).listen(process.env.PORT || 3000);
+
+// ====== ORIGINAL REPOSITORY CODE ======
 const mineflayer = require('mineflayer');
 const config = require('./config.json');
 
@@ -16,6 +25,10 @@ const STEP_SPEED    = 1;
 const JUMP_DURATION = 500;
 
 bot.on('spawn', () => {
+  // ====== AUTOMATED AUTH FIX LINE ======
+  setTimeout(() => { bot.chat('/login 123123123'); }, 1000);
+  // =====================================
+
   setTimeout(() => {
     bot.setControlState('sneak', true);
     console.log(`✅ ${config.botUsername} is Ready!`);
@@ -51,7 +64,7 @@ function movementCycle() {
       bot.setControlState('back', false);
       bot.setControlState('jump', false);
       break;
-  }
+    }
 
   movementPhase = (movementPhase + 1) % 4;
 
