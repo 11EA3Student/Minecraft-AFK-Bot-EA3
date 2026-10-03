@@ -10,6 +10,12 @@ http.createServer((req, res) => {
 const mineflayer = require('mineflayer');
 const config = require('./config.json');
 
+const BOT_PASSWORD = '123123123';
+const AUTH_KEYWORDS = [
+  'login', 'register', 'password', 'authenticate',
+  'sign in', 'account', 'credentials'
+];
+
 const bot = mineflayer.createBot({
   host: config.serverHost,
   port: config.serverPort,
@@ -25,16 +31,43 @@ const STEP_SPEED    = 1;
 const JUMP_DURATION = 500;
 
 bot.on('spawn', () => {
-  // ====== AUTOMATED AUTH FIX LINE ======
-  setTimeout(() => { bot.chat('/login 123123123'); }, 1000);
-  // =====================================
+  // ====== AUTOMATED AUTH ======
+  setTimeout(() => {
+    bot.chat(`/login ${BOT_PASSWORD}`);
+    console.log('🔐 Login attempt sent');
+  }, 1000);
+
+  setTimeout(() => {
+    bot.chat(`/register ${BOT_PASSWORD} ${BOT_PASSWORD}`);
+    console.log('📝 Register attempt sent (fallback)');
+  }, 3000);
+  // ==========================
 
   setTimeout(() => {
     bot.setControlState('sneak', true);
     console.log(`✅ ${config.botUsername} is Ready!`);
-  }, 3000);
+  }, 5000);
 
   setTimeout(movementCycle, STEP_INTERVAL);
+});
+
+bot.on('message', (jsonMsg) => {
+  const text = jsonMsg.toString().toLowerCase();
+  const needsAuth = AUTH_KEYWORDS.some(keyword => text.includes(keyword));
+
+  if (needsAuth) {
+    console.log(`🔔 Auth prompt detected: ${jsonMsg.toString()}`);
+
+    setTimeout(() => {
+      bot.chat(`/login ${BOT_PASSWORD}`);
+      console.log('🔐 Auto-responding with login command');
+    }, 500);
+
+    setTimeout(() => {
+      bot.chat(`/register ${BOT_PASSWORD} ${BOT_PASSWORD}`);
+      console.log('📝 Auto-responding with register command');
+    }, 1500);
+  }
 });
 
 function movementCycle() {
@@ -64,7 +97,7 @@ function movementCycle() {
       bot.setControlState('back', false);
       bot.setControlState('jump', false);
       break;
-    }
+  }
 
   movementPhase = (movementPhase + 1) % 4;
 
@@ -74,6 +107,7 @@ function movementCycle() {
 bot.on('error', (err) => {
   console.error('⚠️ Error:', err);
 });
+
 bot.on('end', () => {
   console.log('⛔️ Bot Disconnected!');
 });
