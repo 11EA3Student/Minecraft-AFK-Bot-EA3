@@ -11,10 +11,23 @@ const mineflayer = require('mineflayer');
 const config = require('./config.json');
 
 const BOT_PASSWORD = '123123123';
-const AUTH_KEYWORDS = [
-  'login', 'register', 'password', 'authenticate',
-  'sign in', 'account', 'credentials'
+const AUTH_PROMPT_PATTERNS = [
+  /please\s+(log\s+in|register|sign\s+in)/i,
+  /type\s+\/login\b/i,
+  /type\s+\/register\b/i,
+  /\/login\b/i,
+  /\/register\b/i,
+  /password\b/i,
+  /authenticate/i,
+  /account\b/i,
+  /new\s+account/i,
+  /login\s+required/i,
+  /register\s+required/i,
+  /wrong\s+password/i,
+  /invalid\s+password/i
 ];
+
+let authHandled = false;
 
 const bot = mineflayer.createBot({
   host: config.serverHost,
@@ -30,16 +43,44 @@ const STEP_INTERVAL = 1500;
 const STEP_SPEED    = 1;
 const JUMP_DURATION = 500;
 
+function sendLogin() {
+  bot.chat(`/login ${BOT_PASSWORD}`);
+  console.log('🔐 Login command sent');
+}
+
+function sendRegister() {
+  bot.chat(`/register ${BOT_PASSWORD} ${BOT_PASSWORD}`);
+  console.log('📝 Register command sent');
+}
+
+function handleAuthPrompt(rawText) {
+  const text = String(rawText || '').toLowerCase();
+  if (!text || authHandled) return;
+
+  const isRegisterPrompt = /register|new account|create account|sign up/.test(text);
+  const isLoginPrompt = /login|log in|sign in|password|authenticate|account/.test(text);
+
+  if (!isRegisterPrompt && !isLoginPrompt) return;
+
+  authHandled = true;
+
+  setTimeout(() => {
+    if (isRegisterPrompt) {
+      sendRegister();
+    } else {
+      sendLogin();
+    }
+  }, 400);
+}
+
 bot.on('spawn', () => {
   // ====== AUTOMATED AUTH ======
   setTimeout(() => {
-    bot.chat(`/login ${BOT_PASSWORD}`);
-    console.log('🔐 Login attempt sent');
+    sendLogin();
   }, 1000);
 
   setTimeout(() => {
-    bot.chat(`/register ${BOT_PASSWORD} ${BOT_PASSWORD}`);
-    console.log('📝 Register attempt sent (fallback)');
+    sendRegister();
   }, 3000);
   // ==========================
 
@@ -52,21 +93,12 @@ bot.on('spawn', () => {
 });
 
 bot.on('message', (jsonMsg) => {
-  const text = jsonMsg.toString().toLowerCase();
-  const needsAuth = AUTH_KEYWORDS.some(keyword => text.includes(keyword));
+  const text = jsonMsg.toString();
+  const promptMatch = AUTH_PROMPT_PATTERNS.some((pattern) => pattern.test(text));
 
-  if (needsAuth) {
-    console.log(`🔔 Auth prompt detected: ${jsonMsg.toString()}`);
-
-    setTimeout(() => {
-      bot.chat(`/login ${BOT_PASSWORD}`);
-      console.log('🔐 Auto-responding with login command');
-    }, 500);
-
-    setTimeout(() => {
-      bot.chat(`/register ${BOT_PASSWORD} ${BOT_PASSWORD}`);
-      console.log('📝 Auto-responding with register command');
-    }, 1500);
+  if (promptMatch) {
+    console.log(`🔔 Auth prompt detected: ${text}`);
+    handleAuthPrompt(text);
   }
 });
 
@@ -110,4 +142,5 @@ bot.on('error', (err) => {
 
 bot.on('end', () => {
   console.log('⛔️ Bot Disconnected!');
+  authHandled = false;
 });
