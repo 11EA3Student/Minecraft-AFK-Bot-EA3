@@ -2,7 +2,5 @@
   "serverHost": "11EA3.aternos.me",
   "serverPort": 11844,
   "botUsername": "EA3Online",
-  "botChunk": 1,
-  "authmePassword": "123123123",
-  "discordWebhook": "https://discord.com"
+  "botChunk": 1
 }
